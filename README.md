@@ -4,7 +4,7 @@ A deliberately over-engineered 3D potato-peeling verification page. Perfectly re
 
 ## GitHub Pages
 
-The site is deployed automatically from `main` by the **Deploy Potato Peeler to GitHub Pages** workflow.
+The site is deployed automatically from `main` by the **Deploy Potato Peeler to GitHub Pages** workflow (`.github/workflows/static.yml`).
 
 Once the first deployment succeeds:
 
