@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Potato Peeling Verification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js for 3D graphics rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+    
+    .font-playful {
+      font-family: 'Fredoka', cursive, sans-serif;
+    }
+
+    /* Cozy Wooden Table Surface Background */
+    .wood-bg {
+      background: radial-gradient(circle at 50% 30%, #3a2215 0%, #20120a 60%, #110804 100%);
+    }
+
+    /* Glass Window Styles */
+    .window-card {
+      background: rgba(26, 22, 28, 0.92);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    .hud-box {
+      background: rgba(18, 14, 20, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      box-shadow: 0 8px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
+
+    @keyframes starPop {
+      0% { transform: scale(0) rotate(0deg); opacity: 0; }
+      50% { transform: scale(1.2) rotate(180deg); opacity: 1; }
+      100% { transform: scale(1) rotate(360deg); opacity: 0.9; }
+    }
+
+    .star-pop {
+      animation: starPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    @keyframes raysRotate {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .rays-bg {
+      animation: raysRotate 25s linear infinite;
+    }
+
+    canvas {
+      outline: none;
+    }
+  </style>
+</head>
+<body class="wood-bg text-slate-100 min-h-screen flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden relative">
+
+  <!-- Table Ambient Lighting & Vignette -->
+  <div class="fixed inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_center,_transparent_20%,_rgba(0,0,0,0.6)_100%)]"></div>
+
+  <!-- Desktop App Window Container -->
+  <div id="windowApp" class="window-card relative z-10 w-full max-w-4xl rounded-2xl overflow-hidden flex flex-col shadow-2xl transition-all duration-300">
+    
+    <!-- Title Bar -->
+    <div class="bg-slate-900/90 border-b border-white/10 px-4 py-2.5 flex items-center justify-between select-none">
+      <div class="flex items-center gap-2.5">
+        <!-- Potato App Icon -->
+        <div class="w-5 h-5 rounded-full bg-amber-600 flex items-center justify-center text-[10px] font-bold shadow-inner border border-amber-400/40">🥔</div>
+        <span class="text-xs sm:text-sm font-semibold tracking-wide text-amber-100/90 font-playful">3D Potato Peeling Verification</span>
+      </div>
+
+      <!-- Window Control Buttons -->
+      <div class="flex items-center gap-2">
+        <button class="w-3.5 h-3.5 rounded-full bg-amber-500/30 border border-amber-400/50 hover:bg-amber-500/60 transition-colors flex items-center justify-center">
+          <span class="w-1.5 h-0.5 bg-amber-200 rounded-full"></span>
+        </button>
+        <button class="w-3.5 h-3.5 rounded-full bg-rose-500/40 border border-rose-400/60 hover:bg-rose-500/80 transition-colors flex items-center justify-center text-[9px] font-bold text-rose-100">✕</button>
+      </div>
+    </div>
+
+    <!-- Main Window Body -->
+    <div class="p-4 sm:p-6 flex flex-col items-center relative">
+      
+      <!-- Headline Header -->
+      <h1 class="text-lg sm:text-2xl font-extrabold text-amber-100 tracking-tight font-playful mb-3 text-center filter drop-shadow-md">
+        Rotate & <span class="text-amber-400 underline decoration-amber-500/50 underline-offset-4">peel</span> 100% of the potato to verify!
+      </h1>
+
+      <!-- 3D Canvas Container Stage Area -->
+      <div id="stageContainer" class="relative w-full h-[380px] sm:h-[460px] rounded-2xl overflow-hidden border border-white/10 bg-slate-950/60 shadow-inner">
+        
+        <!-- WebGL 3D Canvas -->
+        <div id="webglContainer" class="absolute inset-0 w-full h-full cursor-grab active:cursor-grabbing"></div>
+
+        <!-- Floating Controls Guide Badge -->
+        <div class="absolute top-3 left-3 z-20 pointer-events-none bg-slate-900/80 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 text-[11px] font-medium text-slate-300 flex flex-col gap-1 shadow-lg">
+          <div class="flex items-center gap-1.5 text-amber-300 font-semibold font-playful">
+            <span>🖱️ How to Peel:</span>
+          </div>
+          <div>• <span class="text-white font-semibold">Click / Touch & Drag:</span> Peel potato</div>
+          <div>• <span class="text-white font-semibold">Right Drag / 2-Finger Drag:</span> Rotate 360°</div>
+        </div>
+
+        <!-- Top Right Floating HUD Overlay -->
+        <div class="hud-box absolute top-3 right-3 z-20 rounded-xl p-3.5 w-40 sm:w-48 text-right backdrop-blur-md pointer-events-none">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 font-playful">Peeled Surface:</div>
+          <div id="percentText" class="text-2xl sm:text-3xl font-black text-amber-400 font-playful tracking-tight my-0.5">0%</div>
+          
+          <!-- Mini Progress Bar -->
+          <div class="w-full bg-slate-950/80 rounded-full h-2 overflow-hidden border border-white/10 my-2">
+            <div id="progressBar" class="bg-gradient-to-r from-amber-500 to-yellow-300 h-full w-0 rounded-full transition-all duration-75 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
+          </div>
+
+          <div id="hudSubtext" class="text-[11px] font-medium text-slate-300 flex items-center justify-end gap-1.5 font-playful">
+            <span>Rotate to find skin...</span>
+            <span class="text-xs">🥔</span>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Footer Action Row -->
+      <div class="w-full mt-4 flex items-center justify-between">
+        <button id="resetBtn" class="px-4 py-2 text-xs sm:text-sm font-semibold text-slate-300 hover:text-white bg-slate-800/80 hover:bg-slate-700/80 border border-white/10 rounded-xl transition-all flex items-center gap-2 active:scale-95 shadow-md font-playful">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+          <span>Reset Potato</span>
+        </button>
+
+        <div class="text-xs text-slate-400 font-medium font-playful hidden sm:block">
+          3D Physics Simulation • Interactive Peeler
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- SUCCESS MODAL POPUP -->
+  <div id="successModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md opacity-0 pointer-events-none transition-opacity duration-500">
+    
+    <div class="relative w-full max-w-lg bg-slate-900/95 border-2 border-amber-500/40 rounded-3xl p-6 sm:p-8 text-center shadow-[0_0_80px_rgba(245,158,11,0.3)] overflow-hidden transform scale-90 transition-transform duration-500" id="modalCard">
+      
+      <!-- Celebratory Sunburst Background Rays -->
+      <div class="absolute inset-0 pointer-events-none flex items-center justify-center opacity-20">
+        <svg class="w-[500px] h-[500px] rays-bg text-amber-400" viewBox="0 0 100 100" fill="currentColor">
+          <path d="M50 50 L0 0 L10 0 Z M50 50 L30 0 L40 0 Z M50 50 L60 0 L70 0 Z M50 50 L90 0 L100 0 Z M50 50 L100 30 L100 40 Z M50 50 L100 60 L100 70 Z M50 50 L100 90 L100 100 Z M50 50 L70 100 L60 100 Z M50 50 L40 100 L30 100 Z M50 50 L0 100 L0 90 Z M50 50 L0 70 L0 60 Z M50 50 L0 40 L0 30 Z"/>
+        </svg>
+      </div>
+
+      <!-- Celebratory Stars -->
+      <div class="absolute top-6 left-8 text-amber-400 text-2xl star-pop" style="animation-delay: 0.1s;">★</div>
+      <div class="absolute top-10 right-10 text-yellow-300 text-3xl star-pop" style="animation-delay: 0.25s;">✦</div>
+      <div class="absolute bottom-12 left-10 text-amber-300 text-3xl star-pop" style="animation-delay: 0.35s;">✦</div>
+      <div class="absolute bottom-16 right-8 text-amber-400 text-2xl star-pop" style="animation-delay: 0.45s;">★</div>
+
+      <!-- Glowing Peeled Potato Character with Deal-With-It Glasses -->
+      <div class="relative z-10 mx-auto w-36 h-36 sm:w-44 sm:h-44 mb-4 flex items-center justify-center">
+        <div class="absolute inset-0 bg-amber-400/30 rounded-full blur-2xl animate-pulse"></div>
+        <svg class="w-full h-full filter drop-shadow-[0_0_25px_rgba(250,204,21,0.8)]" viewBox="0 0 100 100">
+          <!-- Peeled Golden Potato -->
+          <ellipse cx="50" cy="50" rx="42" ry="38" fill="url(#modalPotatoGrad)"/>
+          
+          <!-- Cute Smile -->
+          <path d="M 40 62 Q 50 70 60 62" stroke="#451a03" stroke-width="3" stroke-linecap="round" fill="none"/>
+
+          <!-- Pixel Glasses ("Deal With It") -->
+          <g fill="#09090b">
+            <!-- Left Lens -->
+            <rect x="25" y="40" width="20" height="12"/>
+            <!-- Right Lens -->
+            <rect x="55" y="40" width="20" height="12"/>
+            <!-- Bridge -->
+            <rect x="45" y="42" width="10" height="4"/>
+            <!-- Pixel Highlights -->
+            <rect x="27" y="42" width="4" height="4" fill="#ffffff"/>
+            <rect x="57" y="42" width="4" height="4" fill="#ffffff"/>
+          </g>
+
+          <defs>
+            <radialGradient id="modalPotatoGrad" cx="35%" cy="30%" r="65%">
+              <stop offset="0%" stop-color="#fffbeb"/>
+              <stop offset="50%" stop-color="#fde047"/>
+              <stop offset="100%" stop-color="#ca8a04"/>
+            </radialGradient>
+          </defs>
+        </svg>
+      </div>
+
+      <!-- Text Header -->
+      <h2 class="relative z-10 text-3xl sm:text-4xl font-black text-emerald-400 tracking-tight font-playful mb-2 filter drop-shadow-lg">
+        HUMAN VERIFIED.
+      </h2>
+
+      <!-- Humorous Subtitle -->
+      <p class="relative z-10 text-amber-100/90 text-sm sm:text-base font-medium max-w-xs mx-auto mb-6 leading-relaxed">
+        Congratulations! You peeled 100% of a 3D potato. Your mastery over root vegetables is absolute.
+      </p>
+
+      <!-- Close Button -->
+      <button id="closeModalBtn" class="relative z-10 w-full sm:w-auto px-8 py-3 bg-slate-800 hover:bg-slate-700 text-amber-100 font-bold rounded-2xl border border-white/15 transition-all active:scale-95 shadow-lg font-playful">
+        Close
+      </button>
+
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const container = document.getElementById('webglContainer');
+      const progressBar = document.getElementById('progressBar');
+      const percentText = document.getElementById('percentText');
+      const hudSubtext = document.getElementById('hudSubtext');
+      const resetBtn = document.getElementById('resetBtn');
+
+      const successModal = document.getElementById('successModal');
+      const modalCard = document.getElementById('modalCard');
+      const closeModalBtn = document.getElementById('closeModalBtn');
+
+      let scene, camera, renderer, controls;
+      let potatoMesh, potatoCanvasTexture, textureContext, textureCanvas;
+      let peelerMesh;
+      let raycaster, mouse;
+
+      let isPeeling = false;
+      let isVerified = false;
+
+      // Efficient UV grid sampling for 100% surface completion check
+      const GRID_U = 64;
+      const GRID_V = 32;
+      const totalGridCells = GRID_U * GRID_V;
+      let peeledGrid = new Uint8Array(totalGridCells);
+      let peeledCount = 0;
+
+      let particleSystem = [];
+      const UV_CANVAS_SIZE = 512; // Optimized canvas resolution for zero RAM lag & crisp quality
+      let needsTextureUpdate = false;
+
+      // Reusable vector allocations to eliminate GC overhead
+      const tempVecA = new THREE.Vector3();
+      const tempVecB = new THREE.Vector3();
+      let lastX = -1;
+      let lastY = -1;
+
+      function init3D() {
+        // 1. Scene Setup
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x110804, 0.08);
+
+        // 2. Camera Setup
+        const rect = container.getBoundingClientRect();
+        camera = new THREE.PerspectiveCamera(45, rect.width / rect.height, 0.1, 100);
+        camera.position.set(0, 0, 5.5);
+
+        // 3. Renderer Setup
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+        renderer.setSize(rect.width, rect.height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // 4. Orbit Controls (For 360 Rotation)
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        controls.rotateSpeed = 0.8;
+        controls.enableZoom = false;
+        controls.enablePan = false;
+        // Map right mouse drag or touch to rotation
+        controls.mouseButtons = {
+          LEFT: THREE.MOUSE.NONE, // We reserve left drag for Peeling
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.ROTATE
+        };
+
+        // 5. Lighting Setup
+        const ambientLight = new THREE.AmbientLight(0xfffbeb, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffedd5, 1.2);
+        dirLight.position.set(4, 6, 5);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 1024;
+        dirLight.shadow.mapSize.height = 1024;
+        scene.add(dirLight);
+
+        const fillLight = new THREE.DirectionalLight(0xc2410c, 0.4);
+        fillLight.position.set(-5, -2, -3);
+        scene.add(fillLight);
+
+        // 6. Raycaster & Mouse setup
+        raycaster = new THREE.Raycaster();
+        mouse = new THREE.Vector2();
+
+        // 7. Create Potato Texture Canvas & Potato Mesh
+        createPotatoTexture();
+        createPotatoMesh();
+        create3DPeeler();
+
+        // 8. Event Listeners
+        window.addEventListener('resize', onWindowResize);
+        setupInteractionListeners();
+
+        // 9. Start Render Loop
+        animate();
+      }
+
+      // Generate High-Res Procedural Skin/Flesh Canvas Texture
+      function createPotatoTexture() {
+        if (!textureCanvas) {
+          textureCanvas = document.createElement('canvas');
+          textureCanvas.width = UV_CANVAS_SIZE;
+          textureCanvas.height = UV_CANVAS_SIZE;
+          textureContext = textureCanvas.getContext('2d', { willReadFrequently: true });
+        }
+
+        textureContext.fillStyle = '#451a03';
+        textureContext.fillRect(0, 0, UV_CANVAS_SIZE, UV_CANVAS_SIZE);
+
+        // Base Unpeeled Brown Skin Gradient
+        const skinGrad = textureContext.createRadialGradient(
+          UV_CANVAS_SIZE/2, UV_CANVAS_SIZE/2, 50,
+          UV_CANVAS_SIZE/2, UV_CANVAS_SIZE/2, UV_CANVAS_SIZE/2
+        );
+        skinGrad.addColorStop(0, '#9a3412');
+        skinGrad.addColorStop(0.5, '#7c2d12');
+        skinGrad.addColorStop(1, '#270e02');
+        textureContext.fillStyle = skinGrad;
+        textureContext.fillRect(0, 0, UV_CANVAS_SIZE, UV_CANVAS_SIZE);
+
+        // Add Skin Speckles
+        textureContext.fillStyle = 'rgba(24, 9, 2, 0.4)';
+        for (let i = 0; i < 1200; i++) {
+          const x = Math.random() * UV_CANVAS_SIZE;
+          const y = Math.random() * UV_CANVAS_SIZE;
+          textureContext.fillRect(x, y, 2, 2);
+        }
+
+        // Add Potato Eyes / Dimples
+        textureContext.fillStyle = 'rgba(20, 7, 1, 0.7)';
+        for (let i = 0; i < 16; i++) {
+          const ex = Math.random() * UV_CANVAS_SIZE;
+          const ey = Math.random() * UV_CANVAS_SIZE;
+          textureContext.beginPath();
+          textureContext.ellipse(ex, ey, 10, 5, Math.random() * Math.PI, 0, Math.PI * 2);
+          textureContext.fill();
+        }
+
+        if (!potatoCanvasTexture) {
+          potatoCanvasTexture = new THREE.CanvasTexture(textureCanvas);
+          potatoCanvasTexture.wrapS = THREE.ClampToEdgeWrapping;
+          potatoCanvasTexture.wrapT = THREE.ClampToEdgeWrapping;
+          potatoCanvasTexture.minFilter = THREE.LinearFilter;
+          potatoCanvasTexture.magFilter = THREE.LinearFilter;
+        } else {
+          potatoCanvasTexture.needsUpdate = true;
+        }
+      }
+
+      // Create Organic 3D Potato Geometry with Noise Bumps
+      function createPotatoMesh() {
+        if (potatoMesh) {
+          scene.remove(potatoMesh);
+          potatoMesh.geometry.dispose();
+        }
+
+        // Optimized Sphere Geometry
+        const geom = new THREE.IcosahedronGeometry(1.6, 16);
+        const posAttr = geom.attributes.position;
+        const vertexCount = posAttr.count;
+
+        // Reset peeled grid tracker
+        peeledGrid.fill(0);
+        peeledCount = 0;
+
+        // Displace Vertices Organically - smooth rounded potato shape
+        for (let i = 0; i < vertexCount; i++) {
+          const x = posAttr.getX(i);
+          const y = posAttr.getY(i);
+          const z = posAttr.getZ(i);
+
+          const bump = 1 + Math.sin(x * 1.5) * 0.04 + Math.cos(y * 1.8) * 0.03 + Math.sin(z * 2.0) * 0.03;
+          
+          posAttr.setX(i, x * bump * 1.05);
+          posAttr.setY(i, y * bump * 0.96);
+          posAttr.setZ(i, z * bump * 1.02);
+        }
+
+        geom.computeVertexNormals();
+
+        const material = new THREE.MeshStandardMaterial({
+          map: potatoCanvasTexture,
+          roughness: 0.85,
+          metalness: 0.05
+        });
+
+        potatoMesh = new THREE.Mesh(geom, material);
+        potatoMesh.castShadow = true;
+        potatoMesh.receiveShadow = true;
+        scene.add(potatoMesh);
+      }
+
+      // Create 3D Metallic Y-Peeler Tool
+      function create3DPeeler() {
+        peelerMesh = new THREE.Group();
+
+        // Handle
+        const handleGeom = new THREE.CylinderGeometry(0.08, 0.07, 1.2, 16);
+        const handleMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 });
+        const handle = new THREE.Mesh(handleGeom, handleMat);
+        handle.position.y = -0.6;
+        peelerMesh.add(handle);
+
+        // Y Metal Frame
+        const frameGeom = new THREE.TorusGeometry(0.22, 0.03, 8, 24, Math.PI);
+        const metalMat = new THREE.MeshStandardMaterial({ color: 0xcbd5e1, metalness: 0.9, roughness: 0.2 });
+        const frame = new THREE.Mesh(frameGeom, metalMat);
+        frame.rotation.x = Math.PI / 2;
+        peelerMesh.add(frame);
+
+        // Swivel Blade
+        const bladeGeom = new THREE.BoxGeometry(0.35, 0.02, 0.06);
+        const blade = new THREE.Mesh(bladeGeom, metalMat);
+        blade.position.y = 0.02;
+        peelerMesh.add(blade);
+
+        peelerMesh.visible = false;
+        scene.add(peelerMesh);
+      }
+
+      // Carve / Peel Action along Surface
+      function peelAtUV(uv, point, normal) {
+        if (!uv || isVerified) return;
+
+        const currX = Math.floor(uv.x * UV_CANVAS_SIZE);
+        const currY = Math.floor((1 - uv.y) * UV_CANVAS_SIZE);
+        const radius = 24; // Blade stroke radius
+
+        if (lastX >= 0 && lastY >= 0) {
+          drawSmoothPeelRibbon(lastX, lastY, currX, currY, radius);
+        } else {
+          drawPeelSpot(currX, currY, radius);
+        }
+
+        lastX = currX;
+        lastY = currY;
+        needsTextureUpdate = true;
+
+        // Mark peeled grid cells for accurate % counting
+        markGridPeeled(uv.x, uv.y, radius / UV_CANVAS_SIZE);
+
+        // Spawn 3D Skin Particles
+        spawnPeelParticles(point, normal);
+
+        // Update progress bar
+        const percentage = Math.min(100, Math.floor((peeledCount / totalGridCells) * 100));
+        progressBar.style.width = `${percentage}%`;
+        percentText.innerText = `${percentage}%`;
+
+        if (percentage >= 95) {
+          hudSubtext.innerHTML = `<span>Almost clean!</span> <span>✨</span>`;
+        } else if (percentage > 40) {
+          hudSubtext.innerHTML = `<span>Keep peeling around!</span> <span>🥔</span>`;
+        } else {
+          hudSubtext.innerHTML = `<span>Rotate & peel all sides!</span> <span>🥔</span>`;
+        }
+
+        if (percentage >= 100) {
+          triggerSuccess();
+        }
+      }
+
+      function markGridPeeled(uvX, uvY, uvRadius) {
+        const minU = Math.max(0, Math.floor((uvX - uvRadius) * GRID_U));
+        const maxU = Math.min(GRID_U - 1, Math.floor((uvX + uvRadius) * GRID_U));
+        const minV = Math.max(0, Math.floor((uvY - uvRadius) * GRID_V));
+        const maxV = Math.min(GRID_V - 1, Math.floor((uvY + uvRadius) * GRID_V));
+
+        for (let u = minU; u <= maxU; u++) {
+          for (let v = minV; v <= maxV; v++) {
+            const idx = v * GRID_U + u;
+            if (peeledGrid[idx] === 0) {
+              peeledGrid[idx] = 1;
+              peeledCount++;
+            }
+          }
+        }
+      }
+
+      // Draw rectangular peel spot
+      function drawPeelSpot(x, y, radius) {
+        textureContext.fillStyle = '#fde047';
+        textureContext.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+        textureContext.fillStyle = '#fef08a';
+        textureContext.fillRect(x - radius * 0.6, y - radius * 0.6, radius * 1.2, radius * 1.2);
+      }
+
+      // Smooth geometric ribbon quad rendering
+      function drawSmoothPeelRibbon(x1, y1, x2, y2, radius) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < 1) {
+          drawPeelSpot(x2, y2, radius);
+          return;
+        }
+
+        const nx = -dy / dist;
+        const ny = dx / dist;
+
+        textureContext.fillStyle = '#fde047';
+        textureContext.beginPath();
+        textureContext.moveTo(x1 + nx * radius, y1 + ny * radius);
+        textureContext.lineTo(x1 - nx * radius, y1 - ny * radius);
+        textureContext.lineTo(x2 - nx * radius, y2 - ny * radius);
+        textureContext.lineTo(x2 + nx * radius, y2 + ny * radius);
+        textureContext.closePath();
+        textureContext.fill();
+
+        // Core highlight band
+        const innerR = radius * 0.65;
+        textureContext.fillStyle = '#fef08a';
+        textureContext.beginPath();
+        textureContext.moveTo(x1 + nx * innerR, y1 + ny * innerR);
+        textureContext.lineTo(x1 - nx * innerR, y1 - ny * innerR);
+        textureContext.lineTo(x2 - nx * innerR, y2 - ny * innerR);
+        textureContext.lineTo(x2 + nx * innerR, y2 + ny * innerR);
+        textureContext.closePath();
+        textureContext.fill();
+      }
+
+      function spawnPeelParticles(pos, normal) {
+        if (particleSystem.length > 20 || Math.random() < 0.6) return;
+
+        const particleGeom = new THREE.BoxGeometry(0.1, 0.02, 0.15);
+        const particleMat = new THREE.MeshStandardMaterial({
+          color: 0x7c2d12,
+          roughness: 0.9,
+          side: THREE.DoubleSide
+        });
+
+        const pMesh = new THREE.Mesh(particleGeom, particleMat);
+        pMesh.position.copy(pos);
+
+        const velocity = tempVecA.copy(normal).multiplyScalar(0.03 + Math.random() * 0.02);
+        velocity.x += (Math.random() - 0.5) * 0.02;
+
+        particleSystem.push({
+          mesh: pMesh,
+          velocity: velocity.clone(),
+          rotSpeed: {
+            x: (Math.random() - 0.5) * 0.2,
+            y: (Math.random() - 0.5) * 0.2,
+            z: (Math.random() - 0.5) * 0.2
+          },
+          life: 1.0
+        });
+
+        scene.add(pMesh);
+      }
+
+      function updateParticles() {
+        for (let i = particleSystem.length - 1; i >= 0; i--) {
+          const p = particleSystem[i];
+          p.mesh.position.add(p.velocity);
+          p.velocity.y -= 0.002;
+          p.mesh.rotation.x += p.rotSpeed.x;
+          p.mesh.rotation.y += p.rotSpeed.y;
+          p.mesh.rotation.z += p.rotSpeed.z;
+          p.life -= 0.035;
+
+          p.mesh.scale.setScalar(Math.max(0, p.life));
+
+          if (p.life <= 0) {
+            scene.remove(p.mesh);
+            p.mesh.geometry.dispose();
+            p.mesh.material.dispose();
+            particleSystem.splice(i, 1);
+          }
+        }
+      }
+
+      // Interaction Event Handlers
+      function setupInteractionListeners() {
+        const el = renderer.domElement;
+
+        const handlePointerStart = (e) => {
+          if (isVerified) return;
+          if (e.pointerType === 'touch' || e.button === 0) {
+            isPeeling = true;
+            lastX = -1;
+            lastY = -1;
+            controls.enabled = false;
+            updatePeelRaycast(e);
+          }
+        };
+
+        const handlePointerMove = (e) => {
+          updatePeelRaycast(e);
+        };
+
+        const handlePointerEnd = () => {
+          isPeeling = false;
+          lastX = -1;
+          lastY = -1;
+          controls.enabled = true;
+          if (peelerMesh) peelerMesh.visible = false;
+        };
+
+        el.addEventListener('pointerdown', handlePointerStart);
+        el.addEventListener('pointermove', handlePointerMove);
+        window.addEventListener('pointerup', handlePointerEnd);
+        window.addEventListener('pointercancel', handlePointerEnd);
+      }
+
+      function updatePeelRaycast(e) {
+        const rect = container.getBoundingClientRect();
+        mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(potatoMesh);
+
+        if (intersects.length > 0) {
+          const hit = intersects[0];
+
+          if (hit.face && hit.face.normal) {
+            tempVecB.copy(hit.face.normal).applyQuaternion(potatoMesh.quaternion).normalize();
+          } else {
+            tempVecB.set(0, 1, 0);
+          }
+
+          if (peelerMesh) {
+            peelerMesh.visible = true;
+            peelerMesh.position.copy(hit.point);
+            peelerMesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tempVecB);
+          }
+
+          if (isPeeling && hit.uv) {
+            peelAtUV(hit.uv, hit.point, tempVecB);
+          }
+        } else {
+          if (peelerMesh && !isPeeling) peelerMesh.visible = false;
+        }
+      }
+
+      function triggerSuccess() {
+        if (isVerified) return;
+        isVerified = true;
+
+        if (peelerMesh) peelerMesh.visible = false;
+
+        // Post cross-origin window message for GitHub Pages iframe embedding
+        window.parent.postMessage({ status: "HUMAN_VERIFIED", score: 100 }, "*");
+
+        // Show Success Modal
+        successModal.classList.remove('opacity-0', 'pointer-events-none');
+        modalCard.classList.remove('scale-90');
+        modalCard.classList.add('scale-100');
+      }
+
+      function resetPotato() {
+        isVerified = false;
+
+        // Hide Modal if open
+        successModal.classList.add('opacity-0', 'pointer-events-none');
+        modalCard.classList.remove('scale-100');
+        modalCard.classList.add('scale-90');
+
+        // Reset HUD
+        progressBar.style.width = '0%';
+        percentText.innerText = '0%';
+        hudSubtext.innerHTML = `<span>Rotate to find skin...</span> <span>🥔</span>`;
+
+        // Clear Particles
+        for (let p of particleSystem) {
+          scene.remove(p.mesh);
+        }
+        particleSystem = [];
+
+        // Re-generate Texture and Potato Geometry
+        createPotatoTexture();
+        createPotatoMesh();
+      }
+
+      function onWindowResize() {
+        if (!container || !renderer || !camera) return;
+        const rect = container.getBoundingClientRect();
+        camera.aspect = rect.width / rect.height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(rect.width, rect.height);
+      }
+
+      // Animation Render Loop
+      function animate() {
+        requestAnimationFrame(animate);
+
+        if (controls) controls.update();
+        updateParticles();
+
+        if (needsTextureUpdate && potatoCanvasTexture) {
+          potatoCanvasTexture.needsUpdate = true;
+          needsTextureUpdate = false;
+        }
+
+        if (renderer && scene && camera) {
+          renderer.render(scene, camera);
+        }
+      }
+
+      // Setup Reset & Close Button Click Listeners
+      if (resetBtn) resetBtn.addEventListener('click', resetPotato);
+      if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => {
+          successModal.classList.add('opacity-0', 'pointer-events-none');
+        });
+      }
+
+      // Initialize 3D Application
+      init3D();
+    });
+  </script>
+</body>
+</html>
